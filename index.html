@@ -195,7 +195,6 @@
         // Send to Apps Script
         const resp = await fetch(APP_SCRIPT_URL, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             action: 'add',
             ...data
