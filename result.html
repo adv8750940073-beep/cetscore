@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CET Rank Live</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; max-width: 600px; margin: auto; }
+    h1 { font-size: 22px; margin-bottom: 12px; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-top: 12px; }
+    .field { margin-bottom: 4px; }
+    .field span.label { font-weight: bold; }
+    .error { color: red; margin-top: 8px; }
+  </style>
+</head>
+<body>
+  <h1>CET Rank (Live)</h1>
+  <div id="info" class="card" style="display:none;">
+    <div class="field"><span class="label">Registration Number:</span> <span id="reg"></span></div>
+    <div class="field"><span class="label">Roll Number:</span> <span id="roll"></span></div>
+    <div class="field"><span class="label">Name:</span> <span id="name"></span></div>
+    <div class="field"><span class="label">Father Name:</span> <span id="father"></span></div>
+    <div class="field"><span class="label">Gender:</span> <span id="gender"></span></div>
+    <div class="field"><span class="label">Category:</span> <span id="category"></span></div>
+    <div class="field"><span class="label">Exam Date:</span> <span id="examDate"></span></div>
+    <div class="field"><span class="label">CET Score:</span> <span id="score"></span></div>
+    <div class="field"><span class="label">Rank:</span> <span id="rank" style="font-size:18px;"></span></div>
+  </div>
+  <div id="message" class="error"></div>
+
+  <script>
+    // === SAME URL AS index.html ===
+    const APP_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
+    const infoBox = document.getElementById('info');
+    const msgEl = document.getElementById('message');
+
+    const regEl = document.getElementById('reg');
+    const rollEl = document.getElementById('roll');
+    const nameEl = document.getElementById('name');
+    const fatherEl = document.getElementById('father');
+    const genderEl = document.getElementById('gender');
+    const categoryEl = document.getElementById('category');
+    const examDateEl = document.getElementById('examDate');
+    const scoreEl = document.getElementById('score');
+    const rankEl = document.getElementById('rank');
+
+    function getQueryParam(name) {
+      const params = new URLSearchParams(window.location.search);
+      return params.get(name);
+    }
+
+    async function loadData() {
+      const reg = getQueryParam('reg');
+      if (!reg) {
+        msgEl.textContent = 'Missing reg parameter in URL.';
+        return;
+      }
+
+      msgEl.textContent = 'Loading...';
+
+      try {
+        const url = `${APP_SCRIPT_URL}?reg=${encodeURIComponent(reg)}`;
+        const resp = await fetch(url);
+        const json = await resp.json();
+        if (!json.success) {
+          throw new Error(json.message || 'No data found');
+        }
+
+        const d = json.data;
+        regEl.textContent = d.registrationNumber;
+        rollEl.textContent = d.rollNumber;
+        nameEl.textContent = d.name;
+        fatherEl.textContent = d.fatherName;
+        genderEl.textContent = d.gender;
+        categoryEl.textContent = d.category;
+        examDateEl.textContent = d.examDate;
+        scoreEl.textContent = d.cetScore;
+        rankEl.textContent = d.rank;
+
+        infoBox.style.display = 'block';
+        msgEl.textContent = '';
+      } catch (err) {
+        msgEl.textContent = err.message || 'Error loading data';
+      }
+    }
+
+    loadData();
+  </script>
+</body>
+</html>
