@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>CET Marks Upload</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <!-- pdf.js CDN -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 16px; max-width: 600px; margin: auto; }
+    h1 { font-size: 20px; margin-bottom: 12px; }
+    .card { border: 1px solid #ddd; padding: 12px; border-radius: 8px; margin-top: 12px; }
+    label { display: block; margin-bottom: 8px; }
+    input[type="file"] { margin-bottom: 8px; }
+    button { padding: 8px 16px; border-radius: 4px; border: none; cursor: pointer; }
+    button:disabled { opacity: 0.6; cursor: not-allowed; }
+    .error { color: red; margin-top: 8px; }
+    .success { color: green; margin-top: 8px; }
+    .field { margin-bottom: 4px; }
+    .field span.label { font-weight: bold; }
+  </style>
+</head>
+<body>
+  <h1>HSSC CET Marks Card PDF Upload</h1>
+
+  <div class="card">
+    <form id="uploadForm">
+      <label>
+        सिर्फ HSSC CET Marks Card PDF अपलोड करें:
+        <input type="file" id="pdfInput" accept="application/pdf" required />
+      </label>
+      <button type="submit" id="submitBtn">Upload & Submit</button>
+    </form>
+    <div id="message" class="error"></div>
+    <div id="preview" class="card" style="display:none; background:#f9f9f9;">
+      <h3>Extracted Data (Preview)</h3>
+      <div class="field"><span class="label">Registration Number:</span> <span id="pReg"></span></div>
+      <div class="field"><span class="label">Roll Number:</span> <span id="pRoll"></span></div>
+      <div class="field"><span class="label">Name:</span> <span id="pName"></span></div>
+      <div class="field"><span class="label">Father Name:</span> <span id="pFather"></span></div>
+      <div class="field"><span class="label">Gender:</span> <span id="pGender"></span></div>
+      <div class="field"><span class="label">Category:</span> <span id="pCategory"></span></div>
+      <div class="field"><span class="label">Exam Date:</span> <span id="pExamDate"></span></div>
+      <div class="field"><span class="label">CET Score:</span> <span id="pScore"></span></div>
+    </div>
+    <div id="status" class="success"></div>
+  </div>
+
+  <script>
+    // === CHANGE THIS ===
+    const APP_SCRIPT_URL = 'PASTE_YOUR_WEB_APP_URL_HERE';
+
+    const pdfInput = document.getElementById('pdfInput');
+    const form = document.getElementById('uploadForm');
+    const messageEl = document.getElementById('message');
+    const statusEl = document.getElementById('status');
+    const submitBtn = document.getElementById('submitBtn');
+
+    const pReg = document.getElementById('pReg');
+    const pRoll = document.getElementById('pRoll');
+    const pName = document.getElementById('pName');
+    const pFather = document.getElementById('pFather');
+    const pGender = document.getElementById('pGender');
+    const pCategory = document.getElementById('pCategory');
+    const pExamDate = document.getElementById('pExamDate');
+    const pScore = document.getElementById('pScore');
+    const previewBox = document.getElementById('preview');
+
+    let extractedData = null;
+
+    function showError(msg) {
+      messageEl.textContent = msg;
+      statusEl.textContent = '';
+    }
+
+    function showStatus(msg) {
+      statusEl.textContent = msg;
+      messageEl.textContent = '';
+    }
+
+    async function extractTextFromPDF(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+          try {
+            const typedArray = new Uint8Array(e.target.result);
+            const pdf = await pdfjsLib.getDocument({ data: typedArray }).promise;
+            let fullText = '';
+            const page = await pdf.getPage(1);
+            const textContent = await page.getTextContent();
+            textContent.items.forEach(item => {
+              fullText += item.str + ' ';
+            });
+            resolve(fullText);
+          } catch (err) {
+            reject(err);
+          }
+        };
+        reader.onerror = reject;
+        reader.readAsArrayBuffer(file);
+      });
+    }
+
+    function parseCETText(text) {
+      // Check that it is HSSC CET Marks Card type
+      if (!text.includes('HARYANA STAFF SELECTION COMMISSION') ||
+          !text.includes('MARKS CARD FOR COMMON ELIGIBILITY TEST')) {
+        throw new Error('यह HSSC CET Marks Card जैसा PDF नहीं है।');
+      }
+
+      if (text.trim().length < 30) {
+        throw new Error('PDF खाली या बहुत छोटा है।');
+      }
+
+      function match(regex) {
+        const m = text.match(regex);
+        return m && m[1] ? m[1].trim() : '';
+      }
+
+      const registrationNumber = match(/Registration Number\s+(\S+)/i);
+      const rollNumber = match(/Roll Number\s+(\S+)/i);
+      const name = match(/Candidate's Name\s+([A-Z\s]+)/i);
+      const gender = match(/Gender\s+(Male|Female|Others?)/i);
+      const examDate = match(/Date of Exam\s+([\d-]+)/i);
+      const category = match(/Category\s+([A-Z]+)/i);
+      const fatherName = match(/Father's Name\s+([A-Z\s]+)/i);
+      const scoreStr = match(/CET MARKS.*?in figure\)\s+([0-9.]+)/i);
+
+      const cetScore = parseFloat(scoreStr || '0') || 0;
+
+      if (!registrationNumber || !rollNumber || !name || !scoreStr) {
+        throw new Error('PDF से जरूरी डेटा नहीं मिल पाया।');
+      }
+
+      return {
+        registrationNumber,
+        rollNumber,
+        name,
+        fatherName,
+        gender,
+        category,
+        examDate,
+        cetScore
+      };
+    }
+
+    pdfInput.addEventListener('change', () => {
+      extractedData = null;
+      previewBox.style.display = 'none';
+      showError('');
+      showStatus('');
+    });
+
+    form.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      showError('');
+      showStatus('');
+      previewBox.style.display = 'none';
+
+      const file = pdfInput.files[0];
+      if (!file) {
+        showError('कृपया एक PDF चुनें।');
+        return;
+      }
+      if (file.type !== 'application/pdf') {
+        showError('सिर्फ PDF फाइल ही अपलोड कर सकते हैं।');
+        return;
+      }
+      if (file.size === 0) {
+        showError('Empty PDF फाइल अपलोड नहीं हो सकती।');
+        return;
+      }
+
+      submitBtn.disabled = true;
+      submitBtn.textContent = 'Processing...';
+
+      try {
+        const text = await extractTextFromPDF(file);
+        const data = parseCETText(text);
+        extractedData = data;
+
+        // Show preview
+        pReg.textContent = data.registrationNumber;
+        pRoll.textContent = data.rollNumber;
+        pName.textContent = data.name;
+        pFather.textContent = data.fatherName;
+        pGender.textContent = data.gender;
+        pCategory.textContent = data.category;
+        pExamDate.textContent = data.examDate;
+        pScore.textContent = data.cetScore;
+        previewBox.style.display = 'block';
+
+        showStatus('डेटा सफलतापूर्वक PDF से निकाला गया। अब Google Sheet में सेव कर रहे हैं...');
+
+        // Send to Apps Script
+        const resp = await fetch(APP_SCRIPT_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'add',
+            ...data
+          })
+        });
+
+        const json = await resp.json();
+        if (!json.success) {
+          throw new Error(json.message || 'Server error');
+        }
+
+        const result = json.data;
+        let msg = `डेटा Google Sheet में सेव हो गया। Rank: ${result.rank}`;
+        if (result.duplicate) {
+          msg += ' (यह Registration Number पहले से मौजूद था, नई entry नहीं बनी)।';
+        }
+        showStatus(msg);
+
+        // Open live page in new window
+        const liveUrl = `result.html?reg=${encodeURIComponent(result.registrationNumber)}`;
+        window.open(liveUrl, '_blank');
+
+      } catch (err) {
+        console.error(err);
+        showError(err.message || 'कुछ गड़बड़ हो गई।');
+      } finally {
+        submitBtn.disabled = false;
+        submitBtn.textContent = 'Upload & Submit';
+      }
+    });
+  </script>
+</body>
+</html>
